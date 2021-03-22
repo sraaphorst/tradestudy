@@ -75,10 +75,16 @@ def read_tables(time_table: str,
     start_slots = {}
     start_slots_gs = {}
     start_slots_gn = {}
-    for obs_id in obs_ids:
+    scheduling_unit_length = Time(3)
+    units = {obs_id: SchedulingUnits(ceil(obs_lengths[obs_id].mins() / scheduling_unit_length.mins()), 
+                                     scheduling_unit_length) for obs_id in obs_ids}
+   
+    for  obs_id in obs_ids:
         # We don't have observations yet, so this calculation must be repeated.
-        time_slots_needed = ceil(obs_lengths[obs_id].mins() / time_slot_length.mins())
-
+        #time_slots_needed = ceil(obs_lengths[obs_id].mins() / time_slot_length.mins())
+        print(obs_id)
+        print(units[obs_id].duration())
+        time_slots_needed = ceil(units[obs_id].duration()/time_slot_length.mins())
         # GS time slots
         start_slots_gs[obs_id] = [time_slot_idx for time_slot_idx, weight in enumerate(weight_gs[obs_id]) if weight > 0]
 
@@ -90,6 +96,7 @@ def read_tables(time_table: str,
             start_slots_gs[obs_id] = start_slots_gs[obs_id][:-(time_slots_needed - 1)]
             start_slots_gn[obs_id] = start_slots_gn[obs_id][:-(time_slots_needed - 1)]
         start_slots[obs_id] = start_slots_gs[obs_id] + start_slots_gn[obs_id]
+        #units[obs_id] = SchedulingUnits(units_needed, scheduling_unit_length)
 
     # Create the time slots: in the example data, there should be 173, each of 3 minutes (the granularity).
     time_slots = TimeSlots(time_slot_length, gs_time_slots, gn_time_slots, time_slot_overlap)
@@ -117,6 +124,10 @@ def read_tables(time_table: str,
     # obs_lengths['GS-2018B-Q-112-25'] is okay: some time already used, 15 timeslots.
     # obs_lengths['GS-2018B-Q-112-26'] is okay: some time already used, 16 timeslots.
 
+
+    distab = [row.lower() for row in obstab['disperser']]
+    dispersers = {obs_id: distab[i] for i, obs_id in enumerate(obs_ids) }
+
     # Create the observations.
     # We parse out the observations that have no start_slot_priorities, i.e. they cannot be started.
     observations = []
@@ -125,7 +136,7 @@ def read_tables(time_table: str,
         if max(weights[obs_id]) == 0 or (len(start_slots_gs[obs_id]) == 0 and len(start_slots_gn[obs_id]) == 0):
             continue
         observations.append(Observation(obs_id, sites[obs_id], bands[obs_id], obs_lengths[obs_id],
-                                        start_slots[obs_id], weights[obs_id]))
+                                        start_slots[obs_id], weights[obs_id], units[obs_id], dispersers[obs_id]))
 
     print(f"Done reading tables: {monotonic() - start_time} s")
     return time_slots, observations

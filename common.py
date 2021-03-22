@@ -56,7 +56,6 @@ class Band(IntEnum):
     Band3 = 3
     Band4 = 4
 
-
 class TimeSlot:
     counter = 0
 
@@ -181,6 +180,33 @@ class _TimeSlotsIterator:
             return slot
         raise StopIteration
 
+class SchedulingUnits:
+    """
+    Basic unit of a schedule. A group of this unit 
+    """
+    def __init__(self, units: int, length: Time):
+        self.units = units
+        self.length = length
+        self.in_use = self.units 
+
+    def duration(self) -> Time:
+        return self.in_use *self.length.mins()
+    
+    def reduce(self, amount: int) -> bool:
+        if self.in_use < amount:
+            return False
+        
+        self.in_use = amount
+        return True
+
+    def expand(self) -> None:
+        self.in_use = self.units
+
+class Entirety(IntEnum):
+
+    Complete = 0
+    Partial = 1
+
 
 class Observation:
     """
@@ -189,19 +215,28 @@ class Observation:
     # Keep a static counter of all observations.
     _counter = 0
 
-    def __init__(self, name: str,
+    def __init__(self, 
+                 name: str,
                  site: Site,
                  band: Band,
                  obs_time: Time,
                  start_slots: List[int],
                  weights: Weights,
-                 allocated_time: Time = None):
+                 units: SchedulingUnits,
+                 disperser: str,
+                 allocated_time: Time = None,):
         self.name = name
         self.idx = Observation._counter
         self.site = site
         self.band = band
         self.used_time = Time(0)
-        self.obs_time = obs_time
+        # new atom model
+        self.units = units 
+        self.disperser = disperser
+        self.acq_overhead = Time(0.2) if 'mirror' == self.disperser else Time(0.3)
+        self.obs_time = Time(self.acq_overhead.mins() + units.duration())
+        self.entirety = Entirety.Complete
+        # END new 
         self.allocated_time = obs_time if allocated_time is None else allocated_time
         self.start_slots = start_slots
         self.weights = weights
@@ -214,4 +249,6 @@ class Observation:
         :param self: the observation
         :return: the number of required time slots
         """
-        return ceil(self.obs_time.mins() / time_slots.time_slot_length.mins())
+        #return ceil(self.obs_time.mins() / time_slots.time_slot_length.mins())
+        return ceil(self.units.duration() / time_slots.time_slot_length.mins())
+
